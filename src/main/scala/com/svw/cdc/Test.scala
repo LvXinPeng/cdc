@@ -1,5 +1,6 @@
 package com.svw.cdc
 
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
 object Test {
@@ -18,15 +19,20 @@ object Test {
       .option("subscribe", "dbserver1.inventory.customers")
       .load()
     import spark.implicits._
-    val value = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)").as[(String, String)]
-    println(value)
+    val lines = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)").as[(String, String)]
+    println(lines)
+    val lv = lines.map(_.toString().split(","))
+    print(lv)
 
-    df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+    val query = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
       .writeStream
       .format("kafka")
       .option("kafka.bootstrap.servers", "172.20.98.138:9092")
       .option("topic", "downstream")
       .option("checkpointLocation", "/tmp/cdc")
       .start()
+
+    query.awaitTermination()
+    spark.close()
   }
 }

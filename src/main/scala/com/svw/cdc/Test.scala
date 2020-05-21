@@ -24,7 +24,6 @@ object Test {
     val lv = lines.map(_.toString().split(","))
     print(lv)
 
-
     val query = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
       .writeStream
       .format("kafka")

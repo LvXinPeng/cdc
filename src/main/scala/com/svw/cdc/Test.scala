@@ -4,7 +4,7 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kudu.spark.kudu.KuduContext
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.streaming.kafka010.KafkaUtils
 //import org.apache.spark.streaming.kafka.KafkaUtils
@@ -33,7 +33,7 @@ object Test {
   def main(args: Array[String]): Unit = {
 
     val spark = SparkSession.builder().appName("cdc-test").config(new SparkConf()).getOrCreate()
-    val ssc = new StreamingContext(spark.sparkContext, Seconds(5))
+//    val ssc = new StreamingContext(spark.sparkContext, Seconds(5))
     val kafkaParams = Map[String, Object]("bootstrap.servers" -> "172.20.98.138:9091"
       , "auto.offset.reset" -> "latest"
       , "key.deserializer" -> classOf[StringDeserializer]
@@ -42,14 +42,14 @@ object Test {
       , "auto.offset.reset" -> "earliest"
     )
 
-    val topic = Array("dbserver1.inventory.customers")
+    val topic = Array("test")
     val kuduMaster = "svlhdp004.csvw.com:7051,svlhdp005.csvw.com:7051,svlhdp006.csvw.com:7051"
     println("print---------------------------------start conn stream")
-    val dStream = KafkaUtils.createDirectStream[String, String](ssc, PreferConsistent, Subscribe[String, String](topic, kafkaParams))
+   /* val dStream = KafkaUtils.createDirectStream[String, String](ssc, PreferConsistent, Subscribe[String, String](topic, kafkaParams))
     println("print---------------------------------connected")
     println("print---------------------------------stream")
     println(dStream)
-    println(dStream.id)
+    println(dStream.id)*/
     val kuduContext = new KuduContext(kuduMaster, spark.sparkContext)
 
     if (!kuduContext.tableExists("impala::tmp.tb_cdc")) {
@@ -58,17 +58,69 @@ object Test {
     else {
       println("The table {impala::tmp.tb_cdc} exists")
     }
+
+
+    val testDF = spark.read.format("json").load("/tmp/testcdc.json")
+
+    testDF.printSchema()
+    println("---------------------------------id")
+    val beforeDF = testDF.select("payload.before.id","payload.before.first_name","payload.before.last_name","payload.before.email").toDF("id","firstname","lastname","email")
+    beforeDF.show()
+    val afterDF = testDF.select("payload.after.id","payload.after.first_name","payload.after.last_name","payload.after.email").toDF("id","firstname","lastname","email")
+    afterDF.show()
+    /**
+     * root
+     * |-- payload: struct (nullable = true)
+     * |    |-- after: struct (nullable = true)
+     * |    |    |-- email: string (nullable = true)
+     * |    |    |-- first_name: string (nullable = true)
+     * |    |    |-- id: long (nullable = true)
+     * |    |    |-- last_name: string (nullable = true)
+     * |    |-- before: struct (nullable = true)
+     * |    |    |-- email: string (nullable = true)
+     * |    |    |-- first_name: string (nullable = true)
+     * |    |    |-- id: long (nullable = true)
+     * |    |    |-- last_name: string (nullable = true)
+     * |    |-- op: string (nullable = true)
+     * |    |-- source: struct (nullable = true)
+     * |    |    |-- db: string (nullable = true)
+     * |    |    |-- file: string (nullable = true)
+     * |    |    |-- gtid: string (nullable = true)
+     * |    |    |-- name: string (nullable = true)
+     * |    |    |-- pos: long (nullable = true)
+     * |    |    |-- row: long (nullable = true)
+     * |    |    |-- server_id: long (nullable = true)
+     * |    |    |-- snapshot: string (nullable = true)
+     * |    |    |-- table: string (nullable = true)
+     * |    |    |-- thread: long (nullable = true)
+     * |    |    |-- ts_sec: long (nullable = true)
+     * |    |-- ts_ms: long (nullable = true)
+     * |    |-- name: string (nullable = true)
+     * |    |-- optional: boolean (nullable = true)
+     * |    |-- type: string (nullable = true)
+     * |    |-- version: long (nullable = true)
+     */
+
+
+   /* val kuduDF = spark.createDataFrame(Seq(
+      ("1001","ming","lv","aaa"),
+      ("1002","mhong","zhang","1aa")
+    )) toDF("id", "firstname", "lastname","email")*/
+
+    kuduContext.upsertRows(afterDF, "impala::tmp.tb_cdc")
+
+
     /*if (!kuduContext.tableExists("tb_cdc")) {
       println("create Kudu Table :{tb_cdc}")
       val createTableOptions = new CreateTableOptions()
       createTableOptions.setRangePartitionColumns(List("id"))
       kuduContext.createTable("tb_cdc", cdcSchema, Seq("id"), createTableOptions)
     }*/
-    dStream.map(record => record.value()).foreachRDD(rdd => {
+    /*dStream.map(record => record.value()).foreachRDD(rdd => {
       val spark = SparkSession.builder().config(rdd.sparkContext.getConf).getOrCreate()
       import spark.implicits._
       val cdcDF = spark.read.json(spark.createDataset(rdd))
-//      cdcDF.printSchema()
+      cdcDF.printSchema()
       val plDF = cdcDF.select(explode(cdcDF("payload"))).toDF("pl")
       val beforeDF = plDF.select(explode(plDF("before"))).toDF("before")
       val afterDF = plDF.select(explode(plDF("after"))).toDF("after")
@@ -79,30 +131,11 @@ object Test {
 //      println("print---------------------------------df")
 //      println(cdcDF.describe())
 //      println(cdcDF.head())
-      kuduContext.upsertRows(cdcDF, "impala::tmp.tb_cdc")
-    })
-    /*dStream.foreachRDD(rdd => {
-      //将rdd数据重新封装为Rdd[cdc]
-      println("print---------------------------------in rdd")
-      val newrdd = rdd.map(line => {
-        val jsonObj = JSON.parseFull(line.value())
-        val map: Map[String, Any] = jsonObj.get.asInstanceOf[Map[String, Any]]
-        Cdc(
-          map("id").asInstanceOf[String],
-          map("first_name").asInstanceOf[String],
-          map("last_name").asInstanceOf[String],
-          map("email").asInstanceOf[String]
-        )
-      })
-
-      val cdcDF = spark.sqlContext.createDataFrame(newrdd)
-      println("print---------------------------------df")
-      println(cdcDF.describe())
-      println(cdcDF.head())
-      kuduContext.upsertRows(cdcDF, "impala::tmp.tb_cdc")
+      kuduContext.upsertRows(afterVal, "impala::tmp.tb_cdc")
     })*/
-    ssc.start()
-    ssc.awaitTermination()
+
+//    ssc.start()
+//    ssc.awaitTermination()
 
 
     /*    val spark = SparkSession

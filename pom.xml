@@ -141,7 +141,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.svw.cdc.Test</mainClass>
+                            <mainClass>com.svw.cdc.ChangedDataCapture</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

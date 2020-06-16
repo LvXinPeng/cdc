@@ -48,11 +48,12 @@ object ChangedDataCapture {
 
     val spark = SparkSession.builder().appName("cdc-test").config(new SparkConf()).getOrCreate()
     val ssc = new StreamingContext(spark.sparkContext, Seconds(5))
-    val kafkaParams = Map[String, Object]("bootstrap.servers" -> "10.160.240.244:9092"
-      , "auto.offset.reset" -> "earliest"
-      , "key.deserializer" -> classOf[StringDeserializer]
-      , "value.deserializer" -> classOf[StringDeserializer]
-      , "group.id" -> "test-consumer-group"
+    val kafkaParams = Map[String, Object](
+      "bootstrap.servers" -> "10.160.240.244:9092",
+      "auto.offset.reset" -> "latest",
+      "key.deserializer" -> classOf[StringDeserializer],
+      "value.deserializer" -> classOf[StringDeserializer],
+      "group.id" -> "test-consumer-group"
     )
 
     val topic = Array("cdc.cdc.tb_cdc")

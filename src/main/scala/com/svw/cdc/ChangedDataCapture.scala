@@ -49,7 +49,7 @@ object ChangedDataCapture {
     val spark = SparkSession.builder().appName("cdc-test").config(new SparkConf()).getOrCreate()
     val ssc = new StreamingContext(spark.sparkContext, Seconds(5))
     val kafkaParams = Map[String, Object](
-      "bootstrap.servers" -> "10.160.240.244:9092",
+      "bootstrap.servers" -> "host:port",
       "auto.offset.reset" -> "latest",
       "key.deserializer" -> classOf[StringDeserializer],
       "value.deserializer" -> classOf[StringDeserializer],
@@ -58,7 +58,7 @@ object ChangedDataCapture {
 
     val topic = Array("cdc.cdc.tb_cdc")
     val kudu_tb_name = "impala::tmp.tb_cdc"
-    val kuduMaster = "svlhdp004.csvw.com:7051,svlhdp005.csvw.com:7051,svlhdp006.csvw.com:7051"
+    val kuduMaster = "ip:port"
 
     val dStream = KafkaUtils.createDirectStream[String, String](ssc, PreferConsistent, Subscribe[String, String](topic, kafkaParams))
 
